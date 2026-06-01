@@ -501,7 +501,7 @@ tbody td:first-child { text-align:left; padding-left:12px; }
 .squad-pos-header {
   padding:7px 16px; font-size:.63rem; font-weight:800; letter-spacing:1px;
   text-transform:uppercase; display:flex; align-items:center; gap:8px;
-  position:sticky; top:0; z-index:1; border-bottom:1px solid var(--border);
+  border-bottom:1px solid var(--border);
 }
 .squad-pos-header.pos-gk  { background:rgba(245,197,24,.08); color:#8a6c00; border-left:3px solid #f5c518; }
 .squad-pos-header.pos-def { background:rgba(42,57,141,.06); color:var(--accent); border-left:3px solid var(--brand-blue); }
@@ -567,6 +567,106 @@ tbody td:first-child { text-align:left; padding-left:12px; }
 /* Other hover underline hints */
 [data-team]:hover .tn,
 [data-team]:hover .mname { text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px; }
+
+/* ════════════════════════════════════════
+   RESPONSIVE
+════════════════════════════════════════ */
+
+/* ── Header ── */
+@media (max-width: 700px) {
+  header { flex-wrap: wrap; padding: 10px 14px; gap: 8px; }
+  .htext { flex: 1; min-width: 0; }
+  .hactions {
+    margin-left: 0; width: 100%;
+    flex-wrap: wrap; gap: 6px;
+  }
+  .tz-select { flex: 1; min-width: 130px; max-width: none; }
+}
+
+@media (max-width: 440px) {
+  header { padding: 8px 10px; gap: 6px; }
+  .trophy img { height: 34px !important; }
+  .htext h1 { font-size: 1.05rem; letter-spacing: 0.6px; }
+  .htext p  { font-size: 0.61rem; }
+  .print-btn { display: none; }
+}
+
+/* ── Tabs ── */
+@media (max-width: 440px) {
+  .tabs { padding: 0 8px; }
+  .tab-btn { padding: 9px 12px; font-size: 0.76rem; }
+}
+
+/* ── Overview ── */
+@media (max-width: 600px) {
+  .ov-wrap { padding: 14px 10px; }
+  .ov-facts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .fact-card { min-width: 0; padding: 10px 6px; }
+  .fact-num  { font-size: 1.4rem; }
+  .groups-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+}
+
+@media (max-width: 360px) {
+  .ov-facts { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 860px) {
+  .ov-m-left { min-width: 0; }
+}
+
+/* ── Group stage ── */
+@media (max-width: 640px) {
+  .gs-wrap { padding: 12px 10px; }
+  .gnav-btn { padding: 5px 10px; font-size: 0.74rem; }
+  /* Standings table scrolls horizontally */
+  .standings-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .standings-card table { min-width: 380px; }
+  .card-hdr small { display: none; }
+}
+
+/* Match rows: drop time/venue column, tighten widths */
+@media (max-width: 580px) {
+  .match-row {
+    grid-template-columns: 30px 1fr 82px 1fr;
+    padding: 7px 8px; gap: 4px;
+  }
+  .mmeta { display: none; }
+  .mname { max-width: 100px; }
+}
+
+@media (max-width: 380px) {
+  .match-row {
+    grid-template-columns: 26px 1fr 74px 1fr;
+    gap: 3px; padding: 6px 6px;
+  }
+  .mteam { font-size: 0.72rem; }
+  .mname { max-width: 76px; }
+  .si { width: 26px; height: 26px; font-size: 0.82rem; }
+  .ssep { font-size: 0.76rem; }
+}
+
+/* ── Knockout bracket ── */
+@media (max-width: 900px) {
+  .ko-wrap { padding: 12px 8px; }
+  .ko-wrap::before {
+    content: '← Swipe to view full bracket →';
+    display: block; text-align: center;
+    font-size: 0.68rem; color: var(--muted);
+    padding: 0 0 8px; letter-spacing: 0.3px; opacity: 0.75;
+  }
+}
+
+/* Smooth touch scroll on mobile */
+.ko-wrap { -webkit-overflow-scrolling: touch; overflow-x: auto; }
+
+/* ── Squad panel ── */
+@media (max-width: 440px) {
+  #squad-panel { width: 100vw; }
+}
 
 /* ════════════════════════════════════════
    PRINT — knockout bracket only
