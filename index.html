@@ -500,18 +500,49 @@ tbody td:first-child { text-align:left; padding-left:12px; }
 .squad-pos-header.pos-mid { background:rgba(60,172,59,.07); color:#1a7a19; border-left:3px solid var(--brand-green); }
 .squad-pos-header.pos-fwd { background:rgba(230,29,37,.06); color:var(--accent2); border-left:3px solid var(--brand-red); }
 .squad-player {
-  display:grid; grid-template-columns:1fr auto;
-  align-items:center; gap:8px; padding:9px 16px;
+  display:grid; grid-template-columns:40px 1fr;
+  align-items:center; gap:10px; padding:7px 16px;
   border-bottom:1px solid rgba(128,128,128,.07); transition:background .12s;
   background:var(--surface);
 }
 .squad-player:hover { background:var(--surface2); }
-.squad-player-name { font-size:.82rem; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.squad-player-club { font-size:.68rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; text-align:right; }
+.squad-avatar-wrap {
+  width:36px; height:36px; border-radius:50%; overflow:hidden;
+  position:relative; flex-shrink:0;
+  border:1.5px solid var(--border); box-shadow:0 1px 4px rgba(0,0,0,.12);
+}
+.squad-avatar-init {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:.6rem; font-weight:800; color:#fff; letter-spacing:.3px;
+}
+.squad-avatar-img {
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; object-position:top center; transition:opacity .25s;
+}
+.squad-player-meta { min-width:0; }
+.squad-player-name { font-size:.82rem; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+.squad-player-club { font-size:.67rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; margin-top:1px; }
 .squad-loading { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 20px; gap:14px; color:var(--muted); font-size:.8rem; }
 .squad-spinner { width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .squad-error { padding:32px 20px; text-align:center; color:var(--muted); font-size:.8rem; line-height:1.5; }
+/* Photo hover preview card */
+#squad-photo-preview {
+  position:fixed; z-index:1200; pointer-events:none;
+  background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  box-shadow:0 12px 40px rgba(42,57,141,.22), 0 2px 8px rgba(0,0,0,.12);
+  overflow:hidden; width:160px;
+  opacity:0; transform:scale(.88) translateY(6px);
+  transition:opacity .18s cubic-bezier(.4,0,.2,1), transform .18s cubic-bezier(.4,0,.2,1);
+}
+#squad-photo-preview.active { opacity:1; transform:scale(1) translateY(0); }
+#squad-preview-img { width:160px; height:200px; object-fit:cover; object-position:top center; display:block; }
+#squad-preview-name {
+  padding:9px 12px; font-size:.74rem; font-weight:700;
+  color:var(--accent); text-align:center; line-height:1.3;
+  background:linear-gradient(135deg,#ffffff,#f1f4ff);
+  border-top:1px solid var(--border);
+}
 /* Bracket team chip (flag+name, excludes score input) */
 .b-chip { display:flex; align-items:center; gap:5px; flex:1; min-width:0; overflow:hidden; }
 /* All data-team elements are clickable */
@@ -658,6 +689,12 @@ tbody td:first-child { text-align:left; padding-left:12px; }
     <div class="bracket-outer" id="bracket-root"></div>
   </div>
 </div>
+</div>
+
+<!-- Squad photo hover preview -->
+<div id="squad-photo-preview">
+  <img id="squad-preview-img" src="" alt="">
+  <div id="squad-preview-name"></div>
 </div>
 
 <!-- Squad slide panel -->
@@ -2081,16 +2118,23 @@ function openSquadPanel(code) {
     coachEl.textContent = c ? `Coach: ${c}` : '';
   };
 
+  const renderAndLoadPhotos = () => {
+    body.innerHTML = _renderSquadBody(code);
+    if (_squads?.[code]?.players?.length) {
+      _loadTeamPhotos(code, _squads[code].players);
+    }
+  };
+
   if (_squads) {
     showCoach(_squads[code]);
-    body.innerHTML = _renderSquadBody(code);
+    renderAndLoadPhotos();
   } else {
     showCoach(null);
     body.innerHTML = '<div class="squad-loading"><div class="squad-spinner"></div><span>Loading squad data…</span></div>';
     _squadsCallbacks.push(() => {
       if (panel.classList.contains('open') && nameEl.textContent === tc.n) {
         showCoach(_squads?.[code]);
-        body.innerHTML = _renderSquadBody(code);
+        renderAndLoadPhotos();
       }
     });
     if (!_squadsFetching) _fetchSquads();
@@ -2102,24 +2146,106 @@ function closeSquadPanel() {
   document.getElementById('squad-overlay').classList.remove('open');
 }
 
+// ── Player photos ──────────────────────────────────────────────────
+const PHOTO_CACHE_KEY = 'wc2026_photos_v2';
+let _photoCache = null;
+
+function _getPhotoCache() {
+  if (!_photoCache) {
+    try { _photoCache = JSON.parse(localStorage.getItem(PHOTO_CACHE_KEY) || '{}'); }
+    catch(e) { _photoCache = {}; }
+  }
+  return _photoCache;
+}
+
+// Strip Wikipedia annotations like "(captain)", "(on loan)", etc. from names
+const _cleanName = n => n.replace(/\s*\([^)]*\)/g, '').trim();
+
+async function _loadTeamPhotos(code, players) {
+  const cache = _getPhotoCache();
+  // Must iterate in same GK→DEF→MID→FWD order as _renderSquadBody so DOM indices match
+  const POS_ORDER = ['GK','DEF','MID','FWD'];
+  const sorted = POS_ORDER.flatMap(pos => players.filter(p => p.pos === pos));
+
+  const needed = sorted.filter(p => cache[_cleanName(p.name)] === undefined);
+
+  if (needed.length) {
+    // Wikipedia pageimages API — up to 50 titles per request
+    for (let i = 0; i < needed.length; i += 50) {
+      const batch = needed.slice(i, i + 50);
+      try {
+        const titleParam = batch.map(p => encodeURIComponent(_cleanName(p.name))).join('|');
+        const url = `https://en.wikipedia.org/w/api.php?action=query&titles=${titleParam}&prop=pageimages&format=json&pithumbsize=120&origin=*`;
+        const json = await (await fetch(url)).json();
+
+        // canonical-title → photo URL map
+        const titlePhoto = {};
+        Object.values(json?.query?.pages || {}).forEach(pg => {
+          if (!pg.missing && pg.thumbnail?.source) titlePhoto[pg.title] = pg.thumbnail.source;
+        });
+        // normalizations + redirects
+        const norm = {};
+        [...(json?.query?.normalized || []), ...(json?.query?.redirects || [])]
+          .forEach(r => { norm[r.from] = r.to; });
+
+        batch.forEach(p => {
+          const cn = _cleanName(p.name);
+          const canonical = norm[cn] || cn;
+          cache[cn] = titlePhoto[canonical] ?? null;
+        });
+      } catch(e) {
+        batch.forEach(p => { cache[_cleanName(p.name)] ??= null; });
+      }
+    }
+    try { localStorage.setItem(PHOTO_CACHE_KEY, JSON.stringify(cache)); } catch(e) {}
+  }
+
+  // Apply cached photos to open panel (using sorted order to match DOM IDs)
+  sorted.forEach((p, i) => {
+    const url = cache[_cleanName(p.name)];
+    if (!url) return;
+    const wrap = document.getElementById(`sp-${code}-${i}`);
+    if (!wrap) return;
+    const img = document.createElement('img');
+    img.className = 'squad-avatar-img';
+    img.alt = _cleanName(p.name);
+    img.onload  = () => { wrap.querySelector('.squad-avatar-init').style.opacity = '0'; wrap.dataset.hasPhoto = '1'; };
+    img.onerror = () => img.remove();
+    img.src = url;
+    wrap.appendChild(img);
+  });
+}
+
 function _renderSquadBody(code) {
   const squad = _squads?.[code];
   if (!squad?.players?.length) {
     return '<div class="squad-error">Squad data not yet available for this team.<br>Check back once the official squad is confirmed.</div>';
   }
   const order = ['GK','DEF','MID','FWD'];
-  const labels = { GK:'Goalkeepers', DEF:'Defenders', MID:'Midfielders', FWD:'Forwards' };
+  const labels  = { GK:'Goalkeepers', DEF:'Defenders', MID:'Midfielders', FWD:'Forwards' };
   const posClass = { GK:'pos-gk', DEF:'pos-def', MID:'pos-mid', FWD:'pos-fwd' };
+  const initBg  = { GK:'#c9a227', DEF:'#2a398d', MID:'#2d8a2c', FWD:'#c41219' };
+
   let html = '';
+  let idx = 0; // global index across all position groups (matches _loadTeamPhotos order)
+
   order.forEach(pos => {
     const group = squad.players.filter(p => p.pos === pos);
     if (!group.length) return;
     html += `<div class="squad-pos-header ${posClass[pos]}">${labels[pos]}<span style="opacity:.5;font-size:.6rem;margin-left:auto">${group.length}</span></div>`;
     group.forEach(p => {
+      const cn = _cleanName(p.name);
+      const initials = cn.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
       html += `<div class="squad-player">
-        <span class="squad-player-name">${p.name}</span>
-        <span class="squad-player-club">${p.club || ''}</span>
+        <div id="sp-${code}-${idx}" class="squad-avatar-wrap">
+          <span class="squad-avatar-init" style="background:${initBg[pos]}">${initials}</span>
+        </div>
+        <div class="squad-player-meta">
+          <span class="squad-player-name">${cn}</span>
+          <span class="squad-player-club">${p.club || ''}</span>
+        </div>
       </div>`;
+      idx++;
     });
   });
   return html || '<div class="squad-error">No players found.</div>';
@@ -2138,6 +2264,41 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSquadPanel(); });
+
+// Photo hover preview — event delegation on squad-body
+(function() {
+  const bodyEl  = document.getElementById('squad-body');
+  const preview = document.getElementById('squad-photo-preview');
+  const pImg    = document.getElementById('squad-preview-img');
+  const pName   = document.getElementById('squad-preview-name');
+  const PW = 160, PH = 240; // preview card dimensions (width + approx height incl. name bar)
+
+  bodyEl.addEventListener('mouseover', e => {
+    const wrap = e.target.closest('.squad-avatar-wrap');
+    if (!wrap?.dataset.hasPhoto) { preview.classList.remove('active'); return; }
+
+    const avatarImg = wrap.querySelector('img.squad-avatar-img');
+    if (!avatarImg) return;
+
+    pImg.src = avatarImg.src;
+    pName.textContent = wrap.closest('.squad-player')?.querySelector('.squad-player-name')?.textContent || '';
+
+    // Position to the left of the squad panel
+    const panelLeft = document.getElementById('squad-panel').getBoundingClientRect().left;
+    const left = panelLeft - PW - 14;
+    if (left < 6) { preview.classList.remove('active'); return; } // no room (mobile)
+
+    const wRect = wrap.getBoundingClientRect();
+    let top = wRect.top + wRect.height / 2 - PH / 2;
+    top = Math.max(8, Math.min(window.innerHeight - PH - 8, top));
+
+    preview.style.left = left + 'px';
+    preview.style.top  = top  + 'px';
+    preview.classList.add('active');
+  });
+
+  bodyEl.addEventListener('mouseleave', () => preview.classList.remove('active'));
+})();
 
 // ═══════════════════════════════════════
 //  INIT
