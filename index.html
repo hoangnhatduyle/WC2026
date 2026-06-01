@@ -1349,7 +1349,7 @@ function makeBMatch(matchId, mirror=false, noArm=false) {
         data-key="${k}" data-pen="pa" title="Penalty shootout score">
     </div>
     <div class="b-match-label">${km.r==='F'?'⭐ FINAL':km.r==='3P'?'🥉 3rd Place':'M'+matchId}</div>
-    <div class="b-match-info">${km.d} · ${km.t} ET · ${km.v}</div>`;
+    <div class="b-match-info">${(dt => dt ? new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short',timeZone:selectedTZ}).format(dt) : `${km.d} · ${km.t} ET`)(etToLocalDate(km.d,km.t))} · ${km.v}</div>`;
 
   card.querySelectorAll('.b-score').forEach(inp => {
     inp.addEventListener('input', e => {
@@ -1619,7 +1619,7 @@ function openPrintSchedule() {
       <tr>
         <td class="ps-match">M${m.id}</td>
         <td class="ps-round">${m.round}</td>
-        <td class="ps-when">${m.d || ''} ${m.t ? `· ${m.t} ET` : ''}</td>
+        <td class="ps-when">${m.dt ? new Intl.DateTimeFormat(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short',timeZone:selectedTZ}).format(m.dt) : `${m.d} · ${m.t} ET`}</td>
         <td class="ps-venue">${m.v || ''}</td>
         <td class="ps-team">${hd.flag}<span class="ps-name${hd.tbd ? ' tbd' : ''}">${hd.name}</span></td>
         <td class="ps-score"><span class="ps-box"></span><span class="ps-dash">-</span><span class="ps-box"></span></td>
@@ -1634,7 +1634,7 @@ function openPrintSchedule() {
         <div>
           <div class="hero-kicker">FIFA WORLD CUP 2026</div>
           <h1>Official Schedule</h1>
-          <div class="hero-sub">104 matches · All times Eastern</div>
+          <div class="hero-sub">104 matches · All times ${selectedTZ === 'America/New_York' ? 'Eastern' : (() => { const city = selectedTZ.replace(/_/g,' ').split('/').pop(); const off = tzOffsetLabel(selectedTZ); return `${city} (${off})`; })()}</div>
         </div>
       </div>
       <div class="print-stage print-stage-schedule" style="--players:url('${playersSrc}')">
@@ -2450,6 +2450,7 @@ function initTzSelect() {
     updateHeaderSubtitle();
     buildOverviewSchedule();
     rerenderActiveGroupMatches();
+    if (document.getElementById('tab-knockout').classList.contains('active')) buildBracket();
   });
 }
 
