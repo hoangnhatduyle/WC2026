@@ -95,6 +95,14 @@ header::after {
 }
 .print-btn:hover { border-color:var(--accent); color:var(--accent); }
 
+.tz-select {
+  padding:6px 10px; background:rgba(42,57,141,0.08); border:1px solid rgba(42,57,141,0.28);
+  color:var(--text); border-radius:6px; cursor:pointer; font-size:0.72rem; font-weight:700;
+  font-family:inherit; max-width:200px; appearance:none; -webkit-appearance:none; transition:all 0.2s;
+}
+.tz-select:hover { border-color:var(--accent); }
+.tz-select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(42,57,141,0.15); }
+
 /* ── TABS ── */
 .tabs { display:flex; background:var(--surface); border-bottom:2px solid var(--border); padding:0 20px; gap:2px; overflow-x:auto; }
 .tab-btn {
@@ -629,9 +637,10 @@ tbody td:first-child { text-align:left; padding-left:12px; }
   <div class="trophy"><img src="5842fe21a6515b1e0ad75b3e.png" alt="FIFA WC Trophy" style="height:48px;width:auto;display:block;object-fit:contain;"></div>
   <div class="htext">
     <h1>FIFA WORLD CUP 2026™</h1>
-    <p>USA · Canada · Mexico &nbsp;|&nbsp; June 11 – July 19, 2026 &nbsp;|&nbsp; All times Eastern (Toledo, OH)</p>
+    <p>USA · Canada · Mexico &nbsp;|&nbsp; June 11 – July 19, 2026 &nbsp;|&nbsp; <span id="tz-subtitle">All times Eastern (Toledo, OH)</span></p>
   </div>
   <div class="hactions">
+    <select id="tz-select" class="tz-select"></select>
     <button class="print-btn" onclick="openPrintSchedule()">Print Schedule</button>
     <button class="print-btn" onclick="openPrintBracket()">Print Bracket</button>
     <button class="reset-btn" onclick="resetAll()">↺ Reset Scores</button>
@@ -655,7 +664,7 @@ tbody td:first-child { text-align:left; padding-left:12px; }
     <div class="fact-card"><div class="fact-num">39</div><div class="fact-label">Days</div></div>
     <div class="fact-card"><div class="fact-num">3</div><div class="fact-label">Countries</div></div>
   </div>
-  <div class="ov-section-title">Next matches — local time</div>
+  <div class="ov-section-title" id="ov-next-title">Next matches — local time</div>
   <div class="ov-schedule">
     <div id="ov-schedule-list" class="ov-schedule-list"></div>
     <div class="ov-schedule-pager">
@@ -907,6 +916,14 @@ function resetAll() {
   scores = {}; save(); location.reload();
 }
 
+// ── Timezone state ──────────────────────────────────────────────────
+const TZ_STORAGE_KEY = 'wc2026_tz';
+let selectedTZ = (() => {
+  const saved = localStorage.getItem(TZ_STORAGE_KEY);
+  if (saved) return saved;
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(e) { return 'America/New_York'; }
+})();
+
 // ═══════════════════════════════════════
 //  STANDINGS
 // ═══════════════════════════════════════
@@ -981,7 +998,8 @@ function etToLocalDate(dStr, tStr) {
 function formatLocalDateTime(dt) {
   return new Intl.DateTimeFormat(undefined, {
     weekday: 'short', month: 'short', day: 'numeric',
-    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    timeZone: selectedTZ
   }).format(dt);
 }
 
@@ -1027,6 +1045,10 @@ function collectMatchesForSchedule() {
 }
 
 function buildOverviewSchedule() {
+  const tzShort = (() => { try { return new Intl.DateTimeFormat('en', { timeZone: selectedTZ, timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value; } catch(e) { return ''; } })();
+  const titleEl = document.getElementById('ov-next-title');
+  if (titleEl) titleEl.textContent = `Next matches — ${tzShort || selectedTZ}`;
+
   const list = document.getElementById('ov-schedule-list');
   const meta = document.getElementById('ov-schedule-meta');
   const prev = document.getElementById('ov-schedule-prev');
@@ -1214,15 +1236,32 @@ function renderStandings(el, gid) {
 }
 
 function renderMatches(el, gid) {
-  const ms = GS.filter(m => m.g === gid).sort((a,b)=>a.id-b.id);
-  const days = {};
-  ms.forEach(m => { (days[m.d] ??= []).push(m); });
+  const ms = GS.filter(m => m.g === gid).sort((a,b) => a.id - b.id);
+
+  const localDateLabel = dt => new Intl.DateTimeFormat(undefined, {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+    timeZone: selectedTZ
+  }).format(dt);
+
+  const localTimeLabel = dt => new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    timeZone: selectedTZ
+  }).format(dt);
+
+  const days = new Map();
+  ms.forEach(m => {
+    const dt = etToLocalDate(m.d, m.t);
+    if (!dt) return;
+    const label = localDateLabel(dt);
+    if (!days.has(label)) days.set(label, []);
+    days.get(label).push({ m, dt });
+  });
 
   el.innerHTML = `<div class="card-hdr"><h3>Fixtures</h3></div>`;
-  Object.entries(days).forEach(([d, dms]) => {
+  days.forEach((entries, dateLabel) => {
     const dg = document.createElement('div');
-    dg.innerHTML = `<div class="md-label">${d}</div>`;
-    dms.forEach(m => {
+    dg.innerHTML = `<div class="md-label">${dateLabel}</div>`;
+    entries.forEach(({ m, dt }) => {
       const ht = T[m.h], at = T[m.a];
       const k = `gs_${m.id}`;
       const sv = scores[k] || {h:'',a:''};
@@ -1245,7 +1284,7 @@ function renderMatches(el, gid) {
           <span class="mflag">${fImg(at.iso)}</span>
           <span class="mname">${at.n}</span>
         </div>
-        <div class="mmeta"><span class="venue-line">${m.t} ET · ${m.v}</span></div>`;
+        <div class="mmeta"><span class="venue-line">${localTimeLabel(dt)} · ${m.v}</span></div>`;
       row.querySelectorAll('.si').forEach(inp => {
         inp.addEventListener('input', e => {
           const {key, side} = e.target.dataset;
@@ -2301,9 +2340,125 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSquadPa
 })();
 
 // ═══════════════════════════════════════
+//  TIMEZONE SELECTOR
+// ═══════════════════════════════════════
+const TZ_GROUPS = [
+  { label: 'Americas', zones: [
+    ['America/New_York',               'Eastern (ET)'],
+    ['America/Chicago',                'Central (CT)'],
+    ['America/Denver',                 'Mountain (MT)'],
+    ['America/Phoenix',                'Arizona'],
+    ['America/Los_Angeles',            'Pacific (PT)'],
+    ['America/Anchorage',              'Alaska'],
+    ['Pacific/Honolulu',               'Hawaii'],
+    ['America/Toronto',                'Toronto'],
+    ['America/Vancouver',              'Vancouver'],
+    ['America/Mexico_City',            'Mexico City'],
+    ['America/Sao_Paulo',              'São Paulo'],
+    ['America/Argentina/Buenos_Aires', 'Buenos Aires'],
+    ['America/Bogota',                 'Bogotá'],
+    ['America/Lima',                   'Lima'],
+    ['America/Santiago',               'Santiago'],
+  ]},
+  { label: 'Europe', zones: [
+    ['Europe/London',  'London'],
+    ['Europe/Lisbon',  'Lisbon'],
+    ['Europe/Paris',   'Paris / Madrid'],
+    ['Europe/Berlin',  'Berlin / Warsaw'],
+    ['Europe/Athens',  'Athens / Helsinki'],
+    ['Europe/Moscow',  'Moscow'],
+  ]},
+  { label: 'Africa', zones: [
+    ['Africa/Cairo',        'Cairo'],
+    ['Africa/Johannesburg', 'Johannesburg'],
+    ['Africa/Lagos',        'Lagos'],
+  ]},
+  { label: 'Asia / Pacific', zones: [
+    ['Asia/Dubai',      'Dubai'],
+    ['Asia/Riyadh',     'Riyadh'],
+    ['Asia/Karachi',    'Karachi'],
+    ['Asia/Kolkata',    'India (IST)'],
+    ['Asia/Dhaka',      'Dhaka'],
+    ['Asia/Bangkok',    'Bangkok / Hanoi'],
+    ['Asia/Singapore',  'Singapore / KL'],
+    ['Asia/Tokyo',      'Tokyo / Seoul'],
+    ['Australia/Sydney','Sydney'],
+    ['Pacific/Auckland','Auckland'],
+  ]},
+];
+
+function tzOffsetLabel(ianaName) {
+  try {
+    const parts = new Intl.DateTimeFormat('en', {
+      timeZone: ianaName, timeZoneName: 'shortOffset'
+    }).formatToParts(new Date());
+    return parts.find(p => p.type === 'timeZoneName')?.value || '';
+  } catch(e) { return ''; }
+}
+
+function updateHeaderSubtitle() {
+  const el = document.getElementById('tz-subtitle');
+  if (!el) return;
+  if (selectedTZ === 'America/New_York') {
+    el.textContent = 'All times Eastern (Toledo, OH)';
+  } else {
+    const city = selectedTZ.replace(/_/g, ' ').split('/').pop();
+    const off  = tzOffsetLabel(selectedTZ);
+    el.textContent = `All times: ${city} (${off})`;
+  }
+}
+
+function rerenderActiveGroupMatches() {
+  const activePanel = document.querySelector('.group-view.active');
+  if (!activePanel) return;
+  const gid = activePanel.id.replace('gp-', '');
+  const mc = activePanel.querySelector('.matches-card');
+  if (mc) renderMatches(mc, gid);
+}
+
+function initTzSelect() {
+  const sel = document.getElementById('tz-select');
+  if (!sel) return;
+
+  const allIana = TZ_GROUPS.flatMap(g => g.zones.map(z => z[0]));
+
+  // Prepend browser TZ if not in the list
+  if (!allIana.includes(selectedTZ)) {
+    const opt = document.createElement('option');
+    opt.value = selectedTZ;
+    opt.textContent = `${selectedTZ.replace(/_/g,' ').split('/').pop()} (${tzOffsetLabel(selectedTZ)})`;
+    opt.selected = true;
+    sel.appendChild(opt);
+  }
+
+  TZ_GROUPS.forEach(({ label, zones }) => {
+    const grp = document.createElement('optgroup');
+    grp.label = label;
+    zones.forEach(([iana, friendly]) => {
+      const opt = document.createElement('option');
+      opt.value = iana;
+      opt.textContent = `${friendly} (${tzOffsetLabel(iana)})`;
+      opt.selected = (iana === selectedTZ);
+      grp.appendChild(opt);
+    });
+    sel.appendChild(grp);
+  });
+
+  sel.addEventListener('change', e => {
+    selectedTZ = e.target.value;
+    localStorage.setItem(TZ_STORAGE_KEY, selectedTZ);
+    updateHeaderSubtitle();
+    buildOverviewSchedule();
+    rerenderActiveGroupMatches();
+  });
+}
+
+// ═══════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════
 load();
+initTzSelect();
+updateHeaderSubtitle();
 buildOverview();
 buildGroupStage();
 setTimeout(initSquads, 0); // background fetch / cache load
