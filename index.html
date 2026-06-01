@@ -450,6 +450,86 @@ tbody td:first-child { text-align:left; padding-left:12px; }
 ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
 /* ════════════════════════════════════════
+   SQUAD PANEL
+════════════════════════════════════════ */
+#squad-overlay {
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,.5); z-index:1000; cursor:pointer;
+}
+#squad-overlay.open { display:block; }
+#squad-panel {
+  position:fixed; top:0; right:0; bottom:0; width:400px; max-width:100vw;
+  background:var(--surface); color:var(--text); z-index:1001;
+  transform:translateX(100%); transition:transform .35s cubic-bezier(.4,0,.2,1);
+  display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:-4px 0 32px rgba(42,57,141,.18); border-left:1px solid var(--border);
+}
+#squad-panel.open { transform:translateX(0); }
+#squad-panel-hdr {
+  background:linear-gradient(135deg,#ffffff 0%,#f1f4ff 50%,#f6f9f7 100%);
+  padding:16px 18px; position:relative;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  border-bottom:1px solid var(--border); flex-shrink:0;
+}
+#squad-panel-hdr::after {
+  content:''; position:absolute; left:0; right:0; bottom:0; height:3px;
+  background:linear-gradient(90deg,var(--brand-blue),var(--brand-red),var(--brand-green));
+}
+#squad-panel-team-info { display:flex; align-items:center; gap:14px; }
+#squad-flag-lg { width:68px; height:48px; border-radius:4px; object-fit:cover; border:1px solid var(--border); box-shadow:0 2px 8px rgba(0,0,0,.1); }
+#squad-team-name { font-size:1.2rem; font-weight:800; color:var(--accent); letter-spacing:.5px; font-family:'Bebas Neue','Montserrat',sans-serif; line-height:1.1; }
+#squad-coach-line { font-size:.72rem; color:var(--muted); margin-top:3px; }
+#squad-close {
+  background:rgba(42,57,141,.08); border:1px solid rgba(42,57,141,.2);
+  color:var(--accent); border-radius:50%; width:30px; height:30px;
+  font-size:.9rem; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; transition:background .15s;
+}
+#squad-close:hover { background:rgba(42,57,141,.15); }
+#squad-body { flex:1; overflow-y:auto; padding:0 0 16px; background:var(--bg); }
+#squad-body::-webkit-scrollbar { width:4px; }
+#squad-body::-webkit-scrollbar-track { background:transparent; }
+#squad-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+.squad-pos-header {
+  padding:7px 16px; font-size:.63rem; font-weight:800; letter-spacing:1px;
+  text-transform:uppercase; display:flex; align-items:center; gap:8px;
+  position:sticky; top:0; z-index:1; border-bottom:1px solid var(--border);
+}
+.squad-pos-header.pos-gk  { background:rgba(245,197,24,.08); color:#8a6c00; border-left:3px solid #f5c518; }
+.squad-pos-header.pos-def { background:rgba(42,57,141,.06); color:var(--accent); border-left:3px solid var(--brand-blue); }
+.squad-pos-header.pos-mid { background:rgba(60,172,59,.07); color:#1a7a19; border-left:3px solid var(--brand-green); }
+.squad-pos-header.pos-fwd { background:rgba(230,29,37,.06); color:var(--accent2); border-left:3px solid var(--brand-red); }
+.squad-player {
+  display:grid; grid-template-columns:1fr auto;
+  align-items:center; gap:8px; padding:9px 16px;
+  border-bottom:1px solid rgba(128,128,128,.07); transition:background .12s;
+  background:var(--surface);
+}
+.squad-player:hover { background:var(--surface2); }
+.squad-player-name { font-size:.82rem; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.squad-player-club { font-size:.68rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; text-align:right; }
+.squad-loading { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 20px; gap:14px; color:var(--muted); font-size:.8rem; }
+.squad-spinner { width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.squad-error { padding:32px 20px; text-align:center; color:var(--muted); font-size:.8rem; line-height:1.5; }
+/* Bracket team chip (flag+name, excludes score input) */
+.b-chip { display:flex; align-items:center; gap:5px; flex:1; min-width:0; overflow:hidden; }
+/* All data-team elements are clickable */
+[data-team] { cursor:pointer; }
+/* Standings row hover */
+.tc[data-team] { border-radius:4px; padding:1px 3px; transition:background .12s; }
+.tc[data-team]:hover { background:rgba(42,57,141,.07); }
+.tc[data-team]:hover .tn { color:var(--accent); }
+/* Fixture row hover */
+.mteam[data-team]:hover .mname { color:var(--accent); }
+/* Squad icon badge — always visible, brightens on hover */
+.squad-icon { font-size:.68rem; opacity:.18; transition:opacity .15s; flex-shrink:0; margin-left:3px; line-height:1; }
+.tc[data-team]:hover .squad-icon { opacity:.75; }
+/* Other hover underline hints */
+[data-team]:hover .tn,
+[data-team]:hover .mname { text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px; }
+
+/* ════════════════════════════════════════
    PRINT — knockout bracket only
 ════════════════════════════════════════ */
 @media print {
@@ -578,6 +658,22 @@ tbody td:first-child { text-align:left; padding-left:12px; }
     <div class="bracket-outer" id="bracket-root"></div>
   </div>
 </div>
+</div>
+
+<!-- Squad slide panel -->
+<div id="squad-overlay" onclick="closeSquadPanel()"></div>
+<div id="squad-panel">
+  <div id="squad-panel-hdr">
+    <div id="squad-panel-team-info">
+      <img id="squad-flag-lg" src="" alt="">
+      <div>
+        <div id="squad-team-name"></div>
+        <div id="squad-coach-line"></div>
+      </div>
+    </div>
+    <button id="squad-close" onclick="closeSquadPanel()">✕</button>
+  </div>
+  <div id="squad-body"></div>
 </div>
 
 <script>
@@ -826,14 +922,14 @@ function resolveSlot(slot) {
 }
 function teamDisplay(slot) {
   const code = resolveSlot(slot);
-  if (code && T[code]) return { flag: fImg(T[code].iso), name: T[code].n, tbd: false };
+  if (code && T[code]) return { flag: fImg(T[code].iso), name: T[code].n, tbd: false, code };
   // Friendly slot label
   const gm = slot.match(/^(\d)([A-L])$/);
-  if (gm) return { flag:'', name: `${gm[1]}${gm[2] === '1' ? 'st' : gm[2] === '2' ? 'nd' : 'rd'} Group ${gm[2]}`, tbd:true };
-  if (slot.startsWith('W')) return { flag:'', name:`Winner M${slot.slice(1)}`, tbd:true };
-  if (slot.startsWith('L')) return { flag:'', name:`Loser M${slot.slice(1)}`, tbd:true };
-  if (slot.startsWith('3rd')) return { flag:'🌍', name: slot.replace('3rd·','Best 3rd '), tbd:true };
-  return { flag:'', name: slot, tbd: true };
+  if (gm) return { flag:'', name: `${gm[1]}${gm[2] === '1' ? 'st' : gm[2] === '2' ? 'nd' : 'rd'} Group ${gm[2]}`, tbd:true, code:null };
+  if (slot.startsWith('W')) return { flag:'', name:`Winner M${slot.slice(1)}`, tbd:true, code:null };
+  if (slot.startsWith('L')) return { flag:'', name:`Loser M${slot.slice(1)}`, tbd:true, code:null };
+  if (slot.startsWith('3rd')) return { flag:'🌍', name: slot.replace('3rd·','Best 3rd '), tbd:true, code:null };
+  return { flag:'', name: slot, tbd: true, code:null };
 }
 
 const WC_YEAR = 2026;
@@ -1050,7 +1146,7 @@ function renderStandings(el, gid) {
   el.innerHTML = `
     <div class="card-hdr">
       <h3>Group ${gid} Standings</h3>
-      <small>Top 2 advance · Best 3rd-place may qualify</small>
+      <small>Top 2 advance · Best 3rd-place may qualify &nbsp;·&nbsp; 👤 tap team for squad</small>
     </div>
     <table>
       <thead><tr>
@@ -1064,10 +1160,11 @@ function renderStandings(el, gid) {
           const rc = i<2 ? 'q-row' : i===2 ? 'r32-row' : '';
           const sc = ['sb1','sb2','sb3','sb4'][i];
           return `<tr class="${rc}">
-            <td><div class="tc">
+            <td><div class="tc" data-team="${s.c}" title="View ${tc.n} squad">
               <span class="sb ${sc}">${i+1}</span>
               <span class="tf">${fImg(tc.iso)}</span>
               <span class="tn">${tc.n}</span>
+              <span class="squad-icon">👤</span>
             </div></td>
             <td>${s.P}</td><td>${s.W}</td><td>${s.D}</td><td>${s.L}</td>
             <td>${s.GF}</td><td>${s.GA}</td>
@@ -1096,7 +1193,7 @@ function renderMatches(el, gid) {
       row.className = 'match-row';
       row.innerHTML = `
         <div class="mnum">M${m.id}</div>
-        <div class="mteam home">
+        <div class="mteam home" data-team="${m.h}" title="View ${ht.n} squad">
           <span class="mname">${ht.n}</span>
           <span class="mflag">${fImg(ht.iso)}</span>
         </div>
@@ -1107,7 +1204,7 @@ function renderMatches(el, gid) {
           <input class="si" type="number" min="0" max="99" value="${sv.a}" placeholder="–"
             data-key="${k}" data-side="a">
         </div>
-        <div class="mteam away">
+        <div class="mteam away" data-team="${m.a}" title="View ${at.n} squad">
           <span class="mflag">${fImg(at.iso)}</span>
           <span class="mname">${at.n}</span>
         </div>
@@ -1152,14 +1249,18 @@ function makeBMatch(matchId, mirror=false, noArm=false) {
   card.className = 'b-match';
   card.innerHTML = `
     <div class="b-team">
-      <span class="bf">${hd.flag}</span>
-      <span class="bn${hd.tbd?' tbd':''}">${hd.name}</span>
+      <span class="b-chip">
+        <span class="bf">${hd.flag}</span>
+        <span class="bn${hd.tbd?' tbd':''}">${hd.name}</span>
+      </span>
       <input class="b-score" type="number" min="0" max="99" value="${sv.h}" placeholder="–"
         data-key="${k}" data-side="h">
     </div>
     <div class="b-team">
-      <span class="bf">${ad.flag}</span>
-      <span class="bn${ad.tbd?' tbd':''}">${ad.name}</span>
+      <span class="b-chip">
+        <span class="bf">${ad.flag}</span>
+        <span class="bn${ad.tbd?' tbd':''}">${ad.name}</span>
+      </span>
       <input class="b-score" type="number" min="0" max="99" value="${sv.a}" placeholder="–"
         data-key="${k}" data-side="a">
     </div>
@@ -1786,11 +1887,265 @@ function _unusedPrintBracket_OLD() {
 }
 
 // ═══════════════════════════════════════
+//  SQUAD PANEL
+// ═══════════════════════════════════════
+const SQUAD_CACHE_KEY = 'wc2026_squads_v9';
+const SQUAD_CACHE_TTL = 86400000; // 24 h
+
+const COACHES = {
+  MEX:'Javier Aguirre',     KOR:'Hong Myung-bo',      CZE:'Ivan Hašek',           RSA:'Hugo Broos',
+  CAN:'Jesse Marsch',       QAT:'Julen Lopetegui',    SUI:'Murat Yakin',           BIH:'Sergej Barbarez',
+  BRA:'Carlo Ancelotti',    HAI:'Marc Collat',         SCO:'Steve Clarke',          MAR:'Walid Regragui',
+  USA:'Mauricio Pochettino',AUS:'Tony Popovic',        TUR:'Vincenzo Montella',     PAR:'Gustavo Alfaro',
+  GER:'Julian Nagelsmann',  CIV:'Emerse Faé',          ECU:'Sebastián Beccacece',   CUW:'Remko Bicentini',
+  NED:'Ronald Koeman',      SWE:'Jon Dahl Tomasson',   JPN:'Hajime Moriyasu',       TUN:'Faouzi Benzarti',
+  BEL:'Domenico Tedesco',   EGY:'Hossam Hassan',       NZL:'Darren Bazeley',        IRN:'Farhad Majidi',
+  ESP:'Luis de la Fuente',  CPV:'Pedro Leitão "Bubista"', KSA:'Hervé Renard',       URU:'Marcelo Bielsa',
+  FRA:'Didier Deschamps',   SEN:'Aliou Cissé',         NOR:'Ståle Solbakken',       IRQ:'Jesús Casas',
+  ARG:'Lionel Scaloni',     ALG:'Vladimir Petković',   JOR:'Hussein Ammouta',       AUT:'Ralf Rangnick',
+  POR:'Roberto Martínez',   COD:'Sébastien Desabre',   UZB:'Srecko Katanec',        COL:'Néstor Lorenzo',
+  ENG:'Thomas Tuchel',      CRO:'Zlatko Dalić',        GHA:'Otto Addo',             PAN:'Thomas Christiansen'
+};
+
+const TEAM_NAME_MAP = {
+  'Mexico':'MEX','Korea Republic':'KOR','South Korea':'KOR','Republic of Korea':'KOR',
+  'Czechia':'CZE','Czech Republic':'CZE','South Africa':'RSA',
+  'Canada':'CAN','Qatar':'QAT','Switzerland':'SUI','Bosnia and Herzegovina':'BIH','Bosnia & Herzegovina':'BIH',
+  'Brazil':'BRA','Haiti':'HAI','Scotland':'SCO','Morocco':'MAR',
+  'United States':'USA','United States of America':'USA',
+  'Australia':'AUS','Türkiye':'TUR','Turkey':'TUR','Paraguay':'PAR',
+  'Germany':'GER','Ivory Coast':'CIV','Côte d\'Ivoire':'CIV','Cote d\'Ivoire':'CIV',
+  'Ecuador':'ECU','Curaçao':'CUW','Curacao':'CUW',
+  'Netherlands':'NED','Sweden':'SWE','Japan':'JPN','Tunisia':'TUN',
+  'Belgium':'BEL','Egypt':'EGY','New Zealand':'NZL','Iran':'IRN',
+  'Spain':'ESP','Cape Verde':'CPV','Cabo Verde':'CPV','Saudi Arabia':'KSA','Uruguay':'URU',
+  'France':'FRA','Senegal':'SEN','Norway':'NOR','Iraq':'IRQ',
+  'Argentina':'ARG','Algeria':'ALG','Jordan':'JOR','Austria':'AUT',
+  'Portugal':'POR','DR Congo':'COD','Democratic Republic of the Congo':'COD',
+  'Congo, Democratic Republic of the':'COD','Congo DR':'COD',
+  'Uzbekistan':'UZB','Colombia':'COL',
+  'England':'ENG','Croatia':'CRO','Ghana':'GHA','Panama':'PAN'
+};
+
+let _squads = null;
+let _squadsFetching = false;
+let _squadsCallbacks = [];
+
+function initSquads() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(SQUAD_CACHE_KEY) || 'null');
+    // Only accept cache that has teams with actual players
+    const hasPlayers = d => d && Object.values(d).some(t => t.players?.length > 0);
+    if (cached && Date.now() - cached.fetchedAt < cached.ttlMs && hasPlayers(cached.data)) {
+      _squads = cached.data;
+      console.log('[Squads] Loaded', Object.keys(_squads).length, 'teams from cache');
+      return;
+    }
+  } catch(e) {}
+  _fetchSquads();
+}
+
+async function _fetchSquads() {
+  if (_squadsFetching) return;
+  _squadsFetching = true;
+  try {
+    const url = 'https://en.wikipedia.org/w/api.php?action=parse&page=2026_FIFA_World_Cup_squads&prop=text&format=json&origin=*';
+    console.log('[Squads] Fetching from Wikipedia API…');
+    const resp = await fetch(url);
+    const json = await resp.json();
+    const html = json?.parse?.text?.['*'];
+    if (!html) {
+      console.warn('[Squads] No HTML in response:', JSON.stringify(json).slice(0, 300));
+      throw new Error('Empty response');
+    }
+    console.log('[Squads] Got HTML, length:', html.length);
+    const data = _parseSquadsHtml(html);
+    const teamCount = Object.keys(data).length;
+    console.log('[Squads] Parsed', teamCount, 'teams:', Object.keys(data));
+    _squads = data;
+    // Only cache if we actually got data
+    if (teamCount > 0) {
+      localStorage.setItem(SQUAD_CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), ttlMs: SQUAD_CACHE_TTL, data }));
+    }
+    _squadsCallbacks.forEach(fn => fn());
+    _squadsCallbacks = [];
+  } catch(err) {
+    console.warn('[Squads] Fetch failed:', err);
+    _squads = {};
+    _squadsCallbacks.forEach(fn => fn());
+    _squadsCallbacks = [];
+  } finally {
+    _squadsFetching = false;
+  }
+}
+
+function _parseSquadsHtml(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const squads = {};
+  const POS_MAP = { 'GK':'GK','DF':'DEF','MF':'MID','FW':'FWD' };
+
+  // Search h2+h3+h4 — Wikipedia uses h3 for team sections but structure can vary
+  const allHeadings = doc.querySelectorAll('h2, h3, h4');
+  console.log('[Squads] Headings in HTML:', allHeadings.length,
+    '| wikitables:', doc.querySelectorAll('table.wikitable').length);
+
+  allHeadings.forEach(h => {
+    const headText = h.textContent.replace(/\[.*?\]/g, '').trim();
+    const code = TEAM_NAME_MAP[headText];
+    if (!code) return;
+
+    console.log('[Squads]', h.tagName, 'matched:', headText, '→', code);
+
+    // Modern MediaWiki wraps headings: <div class="mw-heading mw-heading3"><h3>…</h3></div>
+    // parentElement.className may be a DOMTokenList or string — handle both
+    const par = h.parentElement;
+    const parClass = par ? (par.className?.baseVal ?? par.className ?? '') : '';
+    const container = parClass.includes('mw-heading') ? par : h;
+
+    // Walk siblings from container to find the next wikitable
+    let table = null;
+    let el = container.nextElementSibling;
+    while (el) {
+      const tn = el.tagName;
+      const cn = el.className?.baseVal ?? el.className ?? '';
+      // Stop at next heading block
+      if (tn === 'H2' || tn === 'H3' || tn === 'H4' || cn.includes('mw-heading')) break;
+      // Direct wikitable match
+      if (tn === 'TABLE' && cn.includes('wikitable')) { table = el; break; }
+      // Wikitable nested inside a wrapper element
+      if (el.querySelector) {
+        const inner = el.querySelector('table.wikitable');
+        if (inner) { table = inner; break; }
+      }
+      el = el.nextElementSibling;
+    }
+
+    if (!table) {
+      console.log('[Squads] No wikitable after heading for:', headText);
+      return;
+    }
+
+    // Wikipedia 2026 squad table format (confirmed via debug):
+    //   cells[0] = empty flag indicator
+    //   cells[1] = number+position combined, e.g. "1GK", "23DF", "10MF"
+    //   cells[2] = player name
+    //   cells[last] = club (always last column)
+    const players = [];
+    let coach = null;
+    table.querySelectorAll('tbody tr').forEach(row => {
+      try {
+        const cells = row.querySelectorAll('td, th');
+        if (cells.length < 4) return;
+        const cellText = i => (cells[i]?.textContent ?? '').replace(/\[.*?\]/g, '').trim();
+
+        const numPosText = cellText(1);
+        const posMatch = numPosText.match(/(GK|DF|MF|FW)/i);
+        if (!posMatch) return; // skip header and non-player rows (e.g. manager "MN")
+
+        const pos = POS_MAP[posMatch[1].toUpperCase()];
+        if (!pos) return;
+        const noMatch = numPosText.match(/(\d+)/);
+        const no = noMatch ? parseInt(noMatch[1]) : null;
+        const name = cellText(2);
+        if (!name) return;
+        const club = cellText(cells.length - 1); // club is always the last column
+        players.push({ no, name, pos, club });
+      } catch(e) { /* skip malformed row */ }
+    });
+
+    console.log('[Squads]', code, ':', players.length, 'players');
+    squads[code] = { coach: coach || COACHES[code] || '', players };
+  });
+
+  console.log('[Squads] Total teams parsed:', Object.keys(squads).length);
+  return squads;
+}
+
+function openSquadPanel(code) {
+  const panel = document.getElementById('squad-panel');
+  const overlay = document.getElementById('squad-overlay');
+  const nameEl = document.getElementById('squad-team-name');
+  const coachEl = document.getElementById('squad-coach-line');
+  const flagEl = document.getElementById('squad-flag-lg');
+  const body = document.getElementById('squad-body');
+  const tc = T[code];
+
+  nameEl.textContent = tc.n;
+  flagEl.src = `https://flagcdn.com/w80/${tc.iso}.png`;
+  flagEl.alt = tc.n;
+  panel.classList.add('open');
+  overlay.classList.add('open');
+
+  const showCoach = sq => {
+    const c = sq?.coach || COACHES[code] || '';
+    coachEl.textContent = c ? `Coach: ${c}` : '';
+  };
+
+  if (_squads) {
+    showCoach(_squads[code]);
+    body.innerHTML = _renderSquadBody(code);
+  } else {
+    showCoach(null);
+    body.innerHTML = '<div class="squad-loading"><div class="squad-spinner"></div><span>Loading squad data…</span></div>';
+    _squadsCallbacks.push(() => {
+      if (panel.classList.contains('open') && nameEl.textContent === tc.n) {
+        showCoach(_squads?.[code]);
+        body.innerHTML = _renderSquadBody(code);
+      }
+    });
+    if (!_squadsFetching) _fetchSquads();
+  }
+}
+
+function closeSquadPanel() {
+  document.getElementById('squad-panel').classList.remove('open');
+  document.getElementById('squad-overlay').classList.remove('open');
+}
+
+function _renderSquadBody(code) {
+  const squad = _squads?.[code];
+  if (!squad?.players?.length) {
+    return '<div class="squad-error">Squad data not yet available for this team.<br>Check back once the official squad is confirmed.</div>';
+  }
+  const order = ['GK','DEF','MID','FWD'];
+  const labels = { GK:'Goalkeepers', DEF:'Defenders', MID:'Midfielders', FWD:'Forwards' };
+  const posClass = { GK:'pos-gk', DEF:'pos-def', MID:'pos-mid', FWD:'pos-fwd' };
+  let html = '';
+  order.forEach(pos => {
+    const group = squad.players.filter(p => p.pos === pos);
+    if (!group.length) return;
+    html += `<div class="squad-pos-header ${posClass[pos]}">${labels[pos]}<span style="opacity:.5;font-size:.6rem;margin-left:auto">${group.length}</span></div>`;
+    group.forEach(p => {
+      html += `<div class="squad-player">
+        <span class="squad-player-name">${p.name}</span>
+        <span class="squad-player-club">${p.club || ''}</span>
+      </div>`;
+    });
+  });
+  return html || '<div class="squad-error">No players found.</div>';
+}
+
+// Delegated click — open squad panel on any data-team element (skip inputs/buttons)
+document.addEventListener('click', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+  const el = e.target.closest('[data-team]');
+  if (!el) return;
+  const code = el.dataset.team;
+  if (code && T[code]) {
+    e.stopPropagation();
+    openSquadPanel(code);
+  }
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSquadPanel(); });
+
+// ═══════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════
 load();
 buildOverview();
 buildGroupStage();
+setTimeout(initSquads, 0); // background fetch / cache load
 // bracket built on tab switch
 </script>
 </body>
