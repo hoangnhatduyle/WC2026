@@ -103,6 +103,14 @@ header::after {
 .tz-select:hover { border-color:var(--accent); }
 .tz-select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(42,57,141,0.15); }
 
+.sync-btn {
+  padding:6px 14px; background:rgba(42,57,141,0.10); border:1px solid rgba(42,57,141,0.32);
+  color:var(--accent); border-radius:6px; cursor:pointer; font-size:0.73rem; font-weight:700; transition:all 0.2s;
+}
+.sync-btn:hover { background:rgba(42,57,141,0.18); }
+.sync-btn:disabled { opacity:0.6; cursor:default; }
+#sync-status { font-size:0.68rem; color:var(--muted); white-space:nowrap; }
+
 /* ── TABS ── */
 .tabs { display:flex; background:var(--surface); border-bottom:2px solid var(--border); padding:0 20px; gap:2px; overflow-x:auto; }
 .tab-btn {
@@ -743,6 +751,8 @@ tbody td:first-child { text-align:left; padding-left:12px; }
     <select id="tz-select" class="tz-select"></select>
     <button class="print-btn" onclick="openPrintSchedule()">Print Schedule</button>
     <button class="print-btn" onclick="openPrintBracket()">Print Bracket</button>
+    <button class="sync-btn" id="sync-btn" onclick="syncFromWiki()">⟳ Sync from Wikipedia</button>
+    <span id="sync-status"></span>
     <button class="reset-btn" onclick="resetAll()">↺ Reset Scores</button>
   </div>
 </header>
@@ -2237,6 +2247,180 @@ function _parseSquadsHtml(html) {
   return squads;
 }
 
+// ═══════════════════════════════════════
+//  WIKIPEDIA RESULT SYNC
+//  Pulls played-match scores from Wikipedia so every visitor sees the same
+//  results, instead of each browser only knowing what it typed in manually.
+// ═══════════════════════════════════════
+const WIKI_SYNC_CACHE_KEY = 'wc2026_wiki_sync';
+const WIKI_SYNC_TTL = 15 * 60 * 1000; // 15 min — short, since results land mid-tournament
+const WIKI_GROUP_PAGES = 'ABCDEFGHIJKL'.split('').map(g => ({ g, page: `2026_FIFA_World_Cup_Group_${g}` }));
+const WIKI_KO_PAGE = '2026_FIFA_World_Cup_knockout_stage';
+
+function initWikiSync() {
+  let stale = true;
+  try {
+    const cached = JSON.parse(localStorage.getItem(WIKI_SYNC_CACHE_KEY) || 'null');
+    if (cached && cached.scores) {
+      Object.assign(scores, cached.scores);
+      _updateSyncStatus(cached.fetchedAt);
+      stale = Date.now() - cached.fetchedAt >= WIKI_SYNC_TTL;
+    }
+  } catch(e) {}
+  if (stale) setTimeout(syncFromWiki, 0);
+}
+
+async function syncFromWiki() {
+  const btn = document.getElementById('sync-btn');
+  if (btn) btn.disabled = true;
+  _setSyncStatusText('Syncing…');
+  try {
+    const html = await _fetchWikiPages();
+    const applied = {};
+
+    WIKI_GROUP_PAGES.forEach(({ g, page }) => {
+      const text = html[page];
+      if (!text) return;
+      _parseGroupHtml(text).forEach(m => {
+        const match = GS.find(x => x.g === g &&
+          ((x.h === m.h && x.a === m.a) || (x.h === m.a && x.a === m.h)));
+        if (!match) return;
+        const swapped = match.h !== m.h;
+        const key = `gs_${match.id}`;
+        const entry = swapped ? { h: m.aGoals, a: m.hGoals } : { h: m.hGoals, a: m.aGoals };
+        scores[key] = entry;
+        applied[key] = entry;
+      });
+    });
+
+    if (html[WIKI_KO_PAGE]) _matchKnockoutScores(_parseKnockoutHtml(html[WIKI_KO_PAGE]), applied);
+
+    save();
+    const fetchedAt = Date.now();
+    localStorage.setItem(WIKI_SYNC_CACHE_KEY, JSON.stringify({ fetchedAt, scores: applied }));
+    _updateSyncStatus(fetchedAt);
+    _rebuildAfterSync();
+    console.log('[WikiSync] Applied', Object.keys(applied).length, 'results');
+  } catch(err) {
+    console.warn('[WikiSync] Failed:', err);
+    _setSyncStatusText('Sync unavailable');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function _fetchWikiPages() {
+  const pages = [...WIKI_GROUP_PAGES.map(p => p.page), WIKI_KO_PAGE];
+  const entries = await Promise.all(pages.map(async page => {
+    try {
+      const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(page)}&prop=text&format=json&origin=*`;
+      const resp = await fetch(url);
+      const json = await resp.json();
+      return [page, json?.parse?.text?.['*'] || null];
+    } catch(e) { return [page, null]; }
+  }));
+  return Object.fromEntries(entries);
+}
+
+function _wikiTeamCode(cellEl) {
+  if (!cellEl) return null;
+  const name = cellEl.textContent.replace(/\[.*?\]/g, '').replace(/\s+/g, ' ').trim();
+  return TEAM_NAME_MAP[name] || null;
+}
+
+// "2–0" → ["2","0"]; "3–3 (a.e.t.)" → ["3","3"]; "Match 1" / "" → null (not played)
+function _wikiScoreParts(text) {
+  if (!text) return null;
+  const clean = text.replace(/\(.*?\)/g, '').trim();
+  const m = clean.match(/^(\d+)\s*[–-]\s*(\d+)$/);
+  return m ? [m[1], m[2]] : null;
+}
+
+function _parseGroupHtml(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const out = [];
+  doc.querySelectorAll('div.footballbox').forEach(box => {
+    const hCode = _wikiTeamCode(box.querySelector('.fhome'));
+    const aCode = _wikiTeamCode(box.querySelector('.faway'));
+    const score = _wikiScoreParts(box.querySelector('.fscore')?.textContent);
+    if (!hCode || !aCode || !score) return;
+    out.push({ h: hCode, a: aCode, hGoals: score[0], aGoals: score[1] });
+  });
+  return out;
+}
+
+function _parseKnockoutHtml(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const out = [];
+  doc.querySelectorAll('div.footballbox').forEach(box => {
+    const hCode = _wikiTeamCode(box.querySelector('.fhome'));
+    const aCode = _wikiTeamCode(box.querySelector('.faway'));
+    const fscore = box.querySelector('.fscore');
+    const score = _wikiScoreParts(fscore?.textContent);
+    if (!hCode || !aCode || !score) return;
+
+    // Penalty shootout score sits in its own bare "X–Y" <th>, separate from .fscore
+    let hPen = '', aPen = '';
+    box.querySelectorAll('th').forEach(th => {
+      if (th === fscore) return;
+      const pm = th.textContent.trim().match(/^(\d+)\s*[–-]\s*(\d+)$/);
+      if (pm) { hPen = pm[1]; aPen = pm[2]; }
+    });
+    out.push({ h: hCode, a: aCode, hGoals: score[0], aGoals: score[1], hPen, aPen });
+  });
+  return out;
+}
+
+// Knockout teams aren't known up front — match each parsed result against KO
+// slots by resolving slots to team codes. Later rounds (W73, W101, …) only
+// resolve once earlier rounds are applied, so iterate until nothing new matches.
+// (Slots like "3rd·ABCDF" aren't resolved by resolveSlot() — those few R32
+// matches stay manual, same pre-existing limitation as the bracket display.)
+function _matchKnockoutScores(koRaw, applied) {
+  const remaining = koRaw.map(m => ({ ...m, used: false }));
+  for (let pass = 0; pass < 6; pass++) {
+    let progressed = false;
+    for (const wm of remaining) {
+      if (wm.used) continue;
+      for (const km of KO) {
+        const key = `ko_${km.id}`;
+        if (applied[key]) continue;
+        const rh = resolveSlot(km.h);
+        const ra = resolveSlot(km.a);
+        if (!rh || !ra) continue;
+        let entry = null;
+        if (rh === wm.h && ra === wm.a) entry = { h: wm.hGoals, a: wm.aGoals, ph: wm.hPen, pa: wm.aPen };
+        else if (rh === wm.a && ra === wm.h) entry = { h: wm.aGoals, a: wm.hGoals, ph: wm.aPen, pa: wm.hPen };
+        if (entry) {
+          scores[key] = entry;
+          applied[key] = entry;
+          wm.used = true;
+          progressed = true;
+          break;
+        }
+      }
+    }
+    if (!progressed) break;
+  }
+}
+
+function _rebuildAfterSync() {
+  buildOverview();
+  rerenderActiveGroupMatches();
+  if (document.getElementById('tab-knockout').classList.contains('active')) buildBracket();
+}
+
+function _setSyncStatusText(text) {
+  const el = document.getElementById('sync-status');
+  if (el) el.textContent = text;
+}
+
+function _updateSyncStatus(fetchedAt) {
+  if (!fetchedAt) { _setSyncStatusText(''); return; }
+  const mins = Math.floor((Date.now() - fetchedAt) / 60000);
+  _setSyncStatusText(mins < 1 ? 'Synced just now' : `Synced ${mins} min ago`);
+}
+
 function openSquadPanel(code) {
   const panel = document.getElementById('squad-panel');
   const overlay = document.getElementById('squad-overlay');
@@ -2558,6 +2742,7 @@ function initTzSelect() {
 //  INIT
 // ═══════════════════════════════════════
 load();
+initWikiSync();
 initTzSelect();
 updateHeaderSubtitle();
 buildOverview();
