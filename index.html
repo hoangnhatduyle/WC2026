@@ -1089,7 +1089,7 @@ function teamDisplay(slot) {
   if (code && T[code]) return { flag: fImg(T[code].iso), name: T[code].n, tbd: false, code };
   // Friendly slot label
   const gm = slot.match(/^(\d)([A-L])$/);
-  if (gm) return { flag:'', name: `${gm[1]}${gm[2] === '1' ? 'st' : gm[2] === '2' ? 'nd' : 'rd'} Group ${gm[2]}`, tbd:true, code:null };
+  if (gm) return { flag:'', name: `${gm[1]}${gm[1] === '1' ? 'st' : gm[1] === '2' ? 'nd' : 'rd'} Group ${gm[2]}`, tbd:true, code:null };
   if (slot.startsWith('W')) return { flag:'', name:`Winner M${slot.slice(1)}`, tbd:true, code:null };
   if (slot.startsWith('L')) return { flag:'', name:`Loser M${slot.slice(1)}`, tbd:true, code:null };
   if (slot.startsWith('3rd')) return { flag:'🌍', name: slot.replace('3rd·','Best 3rd '), tbd:true, code:null };
