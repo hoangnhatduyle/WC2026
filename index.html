@@ -188,6 +188,18 @@ header::after {
   background:linear-gradient(180deg, var(--brand-blue), var(--brand-red), var(--brand-green));
 }
 .ov-m-left { display:flex; flex-direction:column; gap:2px; min-width:190px; }
+.ov-match--finished { opacity:0.72; }
+.ov-match--finished::before { background:var(--muted); }
+.ov-match--live::before { background:var(--brand-green); }
+.ov-live-badge {
+  display:inline-flex; align-items:center; gap:5px; margin-left:8px;
+  font-size:0.65rem; font-weight:800; color:var(--brand-green); letter-spacing:0.5px;
+}
+.ov-live-dot {
+  width:8px; height:8px; border-radius:50%; background:var(--brand-green);
+  animation:ov-live-blink 1.2s ease-in-out infinite;
+}
+@keyframes ov-live-blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
 .ov-m-when { font-size:0.78rem; font-weight:700; color:var(--text); }
 .ov-m-meta { font-size:0.68rem; color:var(--muted); }
 .ov-teams { display:flex; align-items:center; gap:8px; flex:1; justify-content:flex-end; flex-wrap:wrap; }
@@ -751,7 +763,7 @@ tbody td:first-child { text-align:left; padding-left:12px; }
     <select id="tz-select" class="tz-select"></select>
     <button class="print-btn" onclick="openPrintSchedule()">Print Schedule</button>
     <button class="print-btn" onclick="openPrintBracket()">Print Bracket</button>
-    <button class="sync-btn" id="sync-btn" onclick="syncFromWiki()">⟳ Sync from Wikipedia</button>
+    <button class="sync-btn" id="sync-btn" onclick="syncFromWiki(true)">⟳ Sync from Wikipedia</button>
     <span id="sync-status"></span>
     <button class="reset-btn" onclick="resetAll()">↺ Reset Scores</button>
   </div>
@@ -774,7 +786,7 @@ tbody td:first-child { text-align:left; padding-left:12px; }
     <div class="fact-card"><div class="fact-num">39</div><div class="fact-label">Days</div></div>
     <div class="fact-card"><div class="fact-num">3</div><div class="fact-label">Countries</div></div>
   </div>
-  <div class="ov-section-title" id="ov-next-title">Next matches — local time</div>
+  <div class="ov-section-title" id="ov-next-title">Match schedule — local time</div>
   <div class="ov-schedule">
     <div id="ov-schedule-list" class="ov-schedule-list"></div>
     <div class="ov-schedule-pager">
@@ -891,7 +903,7 @@ const GS = [
   {id:50,g:"C",h:"MAR",a:"HAI",d:"Wed Jun 24",t:"18:00",v:"Atlanta"},
 
   {id:4, g:"D",h:"USA",a:"PAR",d:"Fri Jun 12",t:"21:00",v:"Los Angeles"},
-  {id:6, g:"D",h:"AUS",a:"TUR",d:"Sat Jun 13",t:"00:00",v:"Vancouver"},
+  {id:6, g:"D",h:"AUS",a:"TUR",d:"Sun Jun 14",t:"00:00",v:"Vancouver"},
   {id:31,g:"D",h:"TUR",a:"PAR",d:"Fri Jun 19",t:"23:00",v:"San Francisco Bay Area"},
   {id:32,g:"D",h:"USA",a:"AUS",d:"Fri Jun 19",t:"15:00",v:"Seattle"},
   {id:59,g:"D",h:"TUR",a:"USA",d:"Thu Jun 25",t:"22:00",v:"Los Angeles"},
@@ -907,7 +919,7 @@ const GS = [
   {id:11,g:"F",h:"NED",a:"JPN",d:"Sun Jun 14",t:"16:00",v:"Dallas"},
   {id:12,g:"F",h:"SWE",a:"TUN",d:"Sun Jun 14",t:"22:00",v:"Monterrey"},
   {id:35,g:"F",h:"NED",a:"SWE",d:"Sat Jun 20",t:"13:00",v:"Houston"},
-  {id:36,g:"F",h:"TUN",a:"JPN",d:"Sat Jun 20",t:"00:00",v:"Monterrey"},
+  {id:36,g:"F",h:"TUN",a:"JPN",d:"Sun Jun 21",t:"00:00",v:"Monterrey"},
   {id:57,g:"F",h:"JPN",a:"SWE",d:"Thu Jun 25",t:"19:00",v:"Dallas"},
   {id:58,g:"F",h:"TUN",a:"NED",d:"Thu Jun 25",t:"19:00",v:"Kansas City"},
 
@@ -933,7 +945,7 @@ const GS = [
   {id:62,g:"I",h:"SEN",a:"IRQ",d:"Fri Jun 26",t:"15:00",v:"Toronto"},
 
   {id:19,g:"J",h:"ARG",a:"ALG",d:"Tue Jun 16",t:"21:00",v:"Kansas City"},
-  {id:20,g:"J",h:"AUT",a:"JOR",d:"Tue Jun 16",t:"00:00",v:"San Francisco Bay Area"},
+  {id:20,g:"J",h:"AUT",a:"JOR",d:"Wed Jun 17",t:"00:00",v:"San Francisco Bay Area"},
   {id:43,g:"J",h:"ARG",a:"AUT",d:"Mon Jun 22",t:"13:00",v:"Dallas"},
   {id:44,g:"J",h:"JOR",a:"ALG",d:"Mon Jun 22",t:"23:00",v:"San Francisco Bay Area"},
   {id:69,g:"J",h:"ALG",a:"AUT",d:"Sat Jun 27",t:"22:00",v:"Kansas City"},
@@ -1097,12 +1109,62 @@ function teamDisplay(slot) {
 }
 
 const WC_YEAR = 2026;
-const scheduleState = { page: 1, perPage: 6 };
+const scheduleState = { page: 1, perPage: 6, jumpToCurrent: true };
+const MATCH_DURATION_MS = { GS: 105 * 60 * 1000, KO: 120 * 60 * 1000 };
+let scheduleLiveTimer = null;
+let wikiSyncDuringLiveTimer = null;
 
 function etToLocalDate(dStr, tStr) {
   const ts = Date.parse(`${dStr} ${WC_YEAR} ${tStr} GMT-0400`);
   if (Number.isNaN(ts)) return null;
   return new Date(ts);
+}
+
+function scheduleScoreKey(m) {
+  return `${m.kind === 'GS' ? 'gs' : 'ko'}_${m.id}`;
+}
+
+function isMatchFinished(m, sv) {
+  if (sv) {
+    const h = parseScore(sv.h), a = parseScore(sv.a);
+    if (h !== null && a !== null) return true;
+  }
+  const dur = MATCH_DURATION_MS[m.kind] || MATCH_DURATION_MS.GS;
+  return Date.now() >= m.dt.getTime() + dur;
+}
+
+function getMatchScheduleStatus(m, sv) {
+  if (isMatchFinished(m, sv)) return 'finished';
+  const now = Date.now();
+  if (now < m.dt.getTime()) return 'upcoming';
+  return 'live';
+}
+
+function findCurrentSchedulePage(allMatches) {
+  const idx = allMatches.findIndex(m => {
+    const st = getMatchScheduleStatus(m, scores[scheduleScoreKey(m)]);
+    return st === 'live' || st === 'upcoming';
+  });
+  const target = idx < 0 ? Math.max(0, allMatches.length - 1) : idx;
+  return Math.floor(target / scheduleState.perPage) + 1;
+}
+
+function ensureScheduleLiveRefresh() {
+  const hasLive = collectMatchesForSchedule().some(m =>
+    getMatchScheduleStatus(m, scores[scheduleScoreKey(m)]) === 'live');
+  if (!hasLive) {
+    clearInterval(scheduleLiveTimer);
+    clearInterval(wikiSyncDuringLiveTimer);
+    scheduleLiveTimer = null;
+    wikiSyncDuringLiveTimer = null;
+    return;
+  }
+  if (!scheduleLiveTimer) {
+    scheduleLiveTimer = setInterval(() => buildOverviewSchedule(), 60000);
+  }
+  if (!wikiSyncDuringLiveTimer) {
+    wikiSyncDuringLiveTimer = setInterval(() => syncFromWiki(), 5 * 60 * 1000);
+  }
 }
 
 function formatLocalDateTime(dt) {
@@ -1157,7 +1219,7 @@ function collectMatchesForSchedule() {
 function buildOverviewSchedule() {
   const tzShort = (() => { try { return new Intl.DateTimeFormat('en', { timeZone: selectedTZ, timeZoneName: 'short' }).formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value; } catch(e) { return ''; } })();
   const titleEl = document.getElementById('ov-next-title');
-  if (titleEl) titleEl.textContent = `Next matches — ${tzShort || selectedTZ}`;
+  if (titleEl) titleEl.textContent = `Match schedule — ${tzShort || selectedTZ}`;
 
   const list = document.getElementById('ov-schedule-list');
   const meta = document.getElementById('ov-schedule-meta');
@@ -1165,28 +1227,35 @@ function buildOverviewSchedule() {
   const next = document.getElementById('ov-schedule-next');
   if (!list || !meta || !prev || !next) return;
 
-  const now = new Date();
-  const upcoming = collectMatchesForSchedule().filter(m => m.dt >= now);
-  const totalPages = Math.max(1, Math.ceil(upcoming.length / scheduleState.perPage));
+  const allMatches = collectMatchesForSchedule();
+  const totalPages = Math.max(1, Math.ceil(allMatches.length / scheduleState.perPage));
+  if (scheduleState.jumpToCurrent) {
+    scheduleState.page = findCurrentSchedulePage(allMatches);
+    scheduleState.jumpToCurrent = false;
+  }
   scheduleState.page = Math.min(Math.max(scheduleState.page, 1), totalPages);
 
   const start = (scheduleState.page - 1) * scheduleState.perPage;
-  const pageItems = upcoming.slice(start, start + scheduleState.perPage);
+  const pageItems = allMatches.slice(start, start + scheduleState.perPage);
+  const liveCount = allMatches.filter(m => getMatchScheduleStatus(m, scores[scheduleScoreKey(m)]) === 'live').length;
 
   list.innerHTML = '';
   if (!pageItems.length) {
-    list.innerHTML = '<div class="ov-empty">No upcoming matches found.</div>';
+    list.innerHTML = '<div class="ov-empty">No matches found.</div>';
   } else {
     pageItems.forEach(m => {
       const hd = teamDisplay(m.h);
       const ad = teamDisplay(m.a);
-      const key = `${m.kind === 'GS' ? 'gs' : 'ko'}_${m.id}`;
+      const key = scheduleScoreKey(m);
       const sv = scores[key] || {h:'',a:'',ph:'',pa:''};
+      const status = getMatchScheduleStatus(m, sv);
       const item = document.createElement('div');
-      item.className = 'ov-match';
+      item.className = 'ov-match' + (status === 'live' ? ' ov-match--live' : status === 'finished' ? ' ov-match--finished' : '');
+      const liveBadge = status === 'live'
+        ? '<span class="ov-live-badge"><span class="ov-live-dot"></span>LIVE</span>' : '';
       item.innerHTML = `
         <div class="ov-m-left">
-          <div class="ov-m-when">${formatLocalDateTime(m.dt)}</div>
+          <div class="ov-m-when">${formatLocalDateTime(m.dt)}${liveBadge}</div>
           <div class="ov-m-meta">${m.round} · M${m.id} · ${m.v} · ${m.et} ET</div>
         </div>
         <div class="ov-teams">
@@ -1242,13 +1311,14 @@ function buildOverviewSchedule() {
     });
   }
 
-  meta.textContent = upcoming.length
-    ? `Page ${scheduleState.page} of ${totalPages} · ${upcoming.length} matches`
-    : 'No upcoming matches';
+  const metaParts = [`Page ${scheduleState.page} of ${totalPages}`, `${allMatches.length} matches`];
+  if (liveCount) metaParts.push(`${liveCount} live`);
+  meta.textContent = metaParts.join(' · ');
   prev.disabled = scheduleState.page <= 1;
   next.disabled = scheduleState.page >= totalPages;
   prev.onclick = () => { scheduleState.page = Math.max(1, scheduleState.page - 1); buildOverviewSchedule(); };
   next.onclick = () => { scheduleState.page = Math.min(totalPages, scheduleState.page + 1); buildOverviewSchedule(); };
+  ensureScheduleLiveRefresh();
 }
 
 // ═══════════════════════════════════════
@@ -2270,12 +2340,22 @@ function initWikiSync() {
   if (stale) setTimeout(syncFromWiki, 0);
 }
 
-async function syncFromWiki() {
+function _clearWikiCaches() {
+  localStorage.removeItem(WIKI_SYNC_CACHE_KEY);
+  localStorage.removeItem(SQUAD_CACHE_KEY);
+  localStorage.removeItem(PHOTO_CACHE_KEY);
+  _squads = null;
+  _photoCache = null;
+}
+
+async function syncFromWiki(manual = false) {
   const btn = document.getElementById('sync-btn');
   if (btn) btn.disabled = true;
-  _setSyncStatusText('Syncing…');
+  _setSyncStatusText(manual ? 'Clearing cache…' : 'Syncing…');
+  if (manual) _clearWikiCaches();
   try {
-    const html = await _fetchWikiPages();
+    _setSyncStatusText('Syncing…');
+    const html = await _fetchWikiPages(manual);
     const applied = {};
 
     WIKI_GROUP_PAGES.forEach(({ g, page }) => {
@@ -2299,22 +2379,29 @@ async function syncFromWiki() {
     const fetchedAt = Date.now();
     localStorage.setItem(WIKI_SYNC_CACHE_KEY, JSON.stringify({ fetchedAt, scores: applied }));
     _updateSyncStatus(fetchedAt);
+    if (manual) {
+      _setSyncStatusText('Refreshing…');
+      location.reload();
+      return;
+    }
     _rebuildAfterSync();
     console.log('[WikiSync] Applied', Object.keys(applied).length, 'results');
   } catch(err) {
     console.warn('[WikiSync] Failed:', err);
     _setSyncStatusText('Sync unavailable');
   } finally {
-    if (btn) btn.disabled = false;
+    if (!manual && btn) btn.disabled = false;
   }
 }
 
-async function _fetchWikiPages() {
+async function _fetchWikiPages(bustCache = false) {
   const pages = [...WIKI_GROUP_PAGES.map(p => p.page), WIKI_KO_PAGE];
+  const fetchOpts = bustCache ? { cache: 'no-store' } : undefined;
+  const bust = bustCache ? `&_=${Date.now()}` : '';
   const entries = await Promise.all(pages.map(async page => {
     try {
-      const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(page)}&prop=text&format=json&origin=*`;
-      const resp = await fetch(url);
+      const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(page)}&prop=text&format=json&origin=*${bust}`;
+      const resp = await fetch(url, fetchOpts);
       const json = await resp.json();
       return [page, json?.parse?.text?.['*'] || null];
     } catch(e) { return [page, null]; }
@@ -2328,11 +2415,12 @@ function _wikiTeamCode(cellEl) {
   return TEAM_NAME_MAP[name] || null;
 }
 
-// "2–0" → ["2","0"]; "3–3 (a.e.t.)" → ["3","3"]; "Match 1" / "" → null (not played)
+// "2–0" → ["2","0"]; "3–3 (a.e.t.)" → ["3","3"]; "1–0 (45')" → ["1","0"]; "Match 1" / "" → null
 function _wikiScoreParts(text) {
   if (!text) return null;
   const clean = text.replace(/\(.*?\)/g, '').trim();
-  const m = clean.match(/^(\d+)\s*[–-]\s*(\d+)$/);
+  if (/^match\s+\d+$/i.test(clean)) return null;
+  const m = clean.match(/^(\d+)\s*[–\-]\s*(\d+)$/);
   return m ? [m[1], m[2]] : null;
 }
 
